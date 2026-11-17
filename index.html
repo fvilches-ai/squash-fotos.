@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotos del torneo de squash</title>
+<style>
+  :root { --bg:#0e1a14; --card:#16271e; --accent:#d9f24a; --text:#f2f5ee; --muted:#9db1a4; }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { padding: 28px 18px 20px; text-align: center; background: linear-gradient(#16271e, var(--bg)); }
+  h1 { font-size: 1.6rem; letter-spacing: -.02em; }
+  header p { color: var(--muted); margin-top: 6px; font-size: .95rem; }
+  .panel { max-width: 520px; margin: 0 auto; padding: 0 18px; }
+  .btn { display: block; width: 100%; padding: 18px; border: 0; border-radius: 14px; background: var(--accent); color: #0e1a14; font-size: 1.1rem; font-weight: 700; cursor: pointer; text-align: center; }
+  .btn:active { transform: scale(.98); }
+  .btn.ghost { background: var(--card); color: var(--text); font-weight: 500; font-size: .95rem; padding: 12px; margin-top: 10px; }
+  input[type=text] { width: 100%; padding: 13px 14px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #2b4237; background: var(--card); color: var(--text); font-size: 1rem; }
+  input[type=file] { display: none; }
+  #status { margin: 12px 0 0; min-height: 1.4em; text-align: center; color: var(--muted); font-size: .95rem; }
+  #status.ok { color: var(--accent); } #status.err { color: #ff8a7a; }
+  .bar { height: 6px; border-radius: 3px; background: #2b4237; margin-top: 10px; overflow: hidden; display: none; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  h2 { max-width: 1100px; margin: 28px auto 12px; padding: 0 18px; font-size: 1rem; color: var(--muted); font-weight: 600; }
+  #grid { max-width: 1100px; margin: 0 auto; padding: 0 10px 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  .ph { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; background: var(--card); cursor: pointer; }
+  .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ph .x { position: absolute; top: 6px; right: 6px; background: #c0392b; color: #fff; border: 0; border-radius: 6px; padding: 4px 8px; font-size: .8rem; }
+  .empty { grid-column: 1/-1; text-align: center; color: var(--muted); padding: 40px 0; }
+  #lb { position: fixed; inset: 0; background: rgba(0,0,0,.94); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; padding: 14px; }
+  #lb.on { display: flex; }
+  #lb img { max-width: 100%; max-height: 82vh; border-radius: 6px; }
+  #lb .cap { margin-top: 12px; color: var(--muted); font-size: .9rem; }
+  #lb a { color: var(--accent); margin-top: 10px; font-size: .95rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎾 Torneo de squash</h1>
+  <p>Sube tus fotos y mira las de los demás</p>
+</header>
+
+<div class="panel">
+  <input type="text" id="name" placeholder="Tu nombre (opcional)" maxlength="40">
+  <label class="btn" for="file">📷 Subir fotos</label>
+  <input type="file" id="file" accept="image/*" multiple>
+  <div class="bar" id="bar"><i></i></div>
+  <div id="status"></div>
+</div>
+
+<h2 id="count">Galería</h2>
+<div id="grid"></div>
+
+<div id="lb"><img id="lbimg" alt=""><div class="cap" id="lbcap"></div><a id="lbdl" download>Descargar</a></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const admin = new URLSearchParams(location.search).get("admin");
+$("#name").value = localStorage.getItem("sq_name") || "";
+
+let known = "";
+async function load() {
+  try {
+    const r = await fetch("/api/photos");
+    const list = await r.json();
+    const sig = list.map((p) => p.id).join();
+    if (sig === known) return;
+    known = sig;
+    $("#count").textContent = list.length ? `Galería · ${list.length} fotos` : "Galería";
+    $("#grid").innerHTML = list.length ? "" : '<div class="empty">Aún no hay fotos. ¡Sé el primero!</div>';
+    for (const p of list) {
+      const d = document.createElement("div");
+      d.className = "ph";
+      d.innerHTML = `<img loading="lazy" src="${p.url}" alt="">` + (admin ? '<button class="x">Borrar</button>' : "");
+      d.onclick = (e) => {
+        if (e.target.classList.contains("x")) return del(p.id);
+        $("#lbimg").src = p.url; $("#lbdl").href = p.url;
+        $("#lbcap").textContent = p.name ? "📸 " + p.name : "";
+        $("#lb").classList.add("on");
+      };
+      $("#grid").appendChild(d);
+    }
+  } catch {}
+}
+async function del(id) {
+  if (!confirm("¿Borrar esta foto?")) return;
+  await fetch("/api/photos/" + id, { method: "DELETE", headers: { "x-admin-token": admin } });
+  known = ""; load();
+}
+$("#lb").onclick = (e) => { if (e.target.tagName !== "A") $("#lb").classList.remove("on"); };
+
+// Reduce la foto a máx. 2000px y la convierte a JPEG (ahorra datos y soporta HEIC en iPhone)
+function shrink(file) {
+  return new Promise((resolve) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 2000 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(u);
+      c.toBlob((b) => resolve(b || file), "image/jpeg", 0.85);
+    };
+    img.onerror = () => resolve(file);
+    img.src = u;
+  });
+}
+
+$("#file").onchange = async (e) => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  const name = $("#name").value.trim();
+  localStorage.setItem("sq_name", name);
+  const st = $("#status"), bar = $("#bar");
+  bar.style.display = "block";
+  let ok = 0, fail = 0;
+  for (let i = 0; i < files.length; i++) {
+    st.className = ""; st.textContent = `Subiendo ${i + 1} de ${files.length}…`;
+    bar.firstElementChild.style.width = (i / files.length) * 100 + "%";
+    try {
+      const blob = await shrink(files[i]);
+      const r = await fetch("/api/upload", { method: "POST", body: blob, headers: { "x-name": encodeURIComponent(name) } });
+      if (r.ok) ok++; else { fail++; st.textContent = (await r.json()).error; }
+    } catch { fail++; }
+  }
+  bar.firstElementChild.style.width = "100%";
+  setTimeout(() => (bar.style.display = "none"), 600);
+  st.className = fail ? "err" : "ok";
+  st.textContent = fail ? `${ok} subidas, ${fail} con error` : `¡Listo! ${ok} foto${ok > 1 ? "s" : ""} subida${ok > 1 ? "s" : ""} 🎉`;
+  e.target.value = "";
+  known = ""; load();
+};
+
+load(); setInterval(load, 8000);
+</script>
+</body>
+</html>

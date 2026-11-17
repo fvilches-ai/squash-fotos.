@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR · Fotos del torneo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; text-align: center; padding: 40px 20px; background: #fff; color: #0e1a14; }
+  h1 { font-size: 2.4rem; margin-bottom: 6px; }
+  p { font-size: 1.3rem; margin: 0 0 28px; }
+  #qr { display: inline-block; padding: 18px; border: 6px solid #0e1a14; border-radius: 20px; }
+  #qr img, #qr canvas { display: block; }
+  small { display: block; margin-top: 22px; color: #555; font-size: 1rem; word-break: break-all; }
+  @media print { small.noprint { display: none; } }
+</style>
+</head>
+<body>
+  <h1>🎾 ¡Comparte tus fotos!</h1>
+  <p>Escanea el QR y sube las fotos que hagas del torneo</p>
+  <div id="qr"></div>
+  <small id="url"></small>
+  <small class="noprint">Imprime esta página (Ctrl/Cmd + P) para ponerla en la pista.</small>
+<script>
+  const target = location.origin + "/";
+  new QRCode(document.getElementById("qr"), { text: target, width: 320, height: 320, correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById("url").textContent = target;
+</script>
+</body>
+</html>
